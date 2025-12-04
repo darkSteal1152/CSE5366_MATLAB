@@ -1,0 +1,87 @@
+clear; close all; clc;
+
+[x, Fs] = audioread('noisyaudio-1.wav');
+
+x = mean(x, 2);
+
+N = length(x);
+
+X = fft(x);
+X_shifted = fftshift(X);
+
+f = (-N/2 : N/2-1) * (Fs/N);
+
+figure;
+plot(f, abs(X_shifted));
+xlabel('Frequency (Hz)');
+ylabel('|DFT Magnitude|');
+title('Magnitude Spectrum');
+grid on;
+
+fp = 2000;      % Passband edge (Hz)
+fsb = 2500;     % Stopband edge (Hz)
+Ap = 1;         % Passband ripple (dB)
+As = 40;        % Stopband attenuation (dB)
+
+Omega_p = 2*pi*fp;
+Omega_s = 2*pi*fsb;
+
+[N, Wc] = buttord(Omega_p, Omega_s, Ap, As, 's');
+
+fprintf('Filter order N = %d\n', N);
+fprintf('Analog cutoff Wc = %.2f rad/s\n', Wc);
+
+% Analog Butterworth
+[b_s, a_s] = butter(N, Wc, 's');
+
+% Convert to digital via impulse invariance
+[b_z, a_z] = impinvar(b_s, a_s, Fs);
+
+[H, f_resp] = freqz(b_z, a_z, 4096, Fs);
+magdB = 20*log10(abs(H));
+
+figure;
+plot(f_resp, magdB, 'LineWidth', 1.2);
+xlabel('Frequency (Hz)');
+ylabel('Magnitude (dB)');
+title('Digital Filter Response');
+grid on;
+xlim([0 Fs/2]);
+
+y = filter(b_z, a_z, x);
+
+Y = fft(y);
+Y_shifted = fftshift(Y);
+
+figure;
+plot(f, abs(Y_shifted), 'LineWidth', 1.2);
+xlabel('Frequency (Hz)');
+ylabel('|Y(f)|');
+title('Filtered Magnitude DFT');
+grid on;
+xlim([-Fs/2, Fs/2]);
+
+disp('Playing original noisy audio...');
+sound(x, Fs);
+pause(length(x)/Fs + 1);
+
+disp('Playing filtered audio...');
+sound(y, Fs);
+
+audiowrite('filteredaudio.wav', y, Fs);
+disp('Filtered audio saved as filteredaudio.wav');
+
+t = (0:length(x)-1)/Fs;
+
+figure;
+subplot(2,1,1);
+plot(t, x);
+title('Original Audio');
+xlabel('Time (s)');
+ylabel('Amplitude');
+
+subplot(2,1,2);
+plot(t, y);
+title('Filtered Audio');
+xlabel('Time (s)');
+ylabel('Amplitude');
